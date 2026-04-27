@@ -84,6 +84,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -136,6 +137,7 @@ private fun AudioPlayerApp() {
     var selectedModel by rememberSaveable { mutableStateOf(supportedModels.first()) }
     var isPlaying by rememberSaveable { mutableStateOf(false) }
     var selectedTrackIndex by rememberSaveable { mutableStateOf(-1) }
+    var isResolvingPlayback by rememberSaveable { mutableStateOf(false) }
     var modelExpanded by remember { mutableStateOf(false) }
     var trackExpanded by remember { mutableStateOf(false) }
     val chatMessages = remember { mutableStateListOf<ChatMessage>() }
@@ -339,31 +341,37 @@ private fun AudioPlayerApp() {
                     }
                     Button(
                         onClick = {
+                            if (isResolvingPlayback) return@Button
                             val selected = tracks.getOrNull(selectedTrackIndex)
                             if (selected != null) {
                                 scope.launch {
-                                    val playablePath = if (selected.path.isNotBlank()) {
-                                        selected.path
-                                    } else {
-                                        copyUriToCachePath(context, selected.contentUri, selected.title)
-                                    }
+                                    isResolvingPlayback = true
+                                    try {
+                                        val playablePath = if (selected.path.isNotBlank()) {
+                                            selected.path
+                                        } else {
+                                            copyUriToCachePath(context, selected.contentUri, selected.title)
+                                        }
 
-                                    val ok = playablePath?.let { engine.play(it) } == true
-                                    if (ok && selected.path.isBlank() && playablePath != null) {
-                                        tracks[selectedTrackIndex] = selected.copy(path = playablePath)
-                                    }
-                                    isPlaying = ok
-                                    chatMessages.add(
-                                        ChatMessage(
-                                            id = System.currentTimeMillis(),
-                                            sender = Sender.SYSTEM,
-                                            text = if (ok) {
-                                                "Playing: ${selected.title}"
-                                            } else {
-                                                "Failed to play: ${selected.title}"
-                                            }
+                                        val ok = playablePath?.let { engine.play(it) } == true
+                                        if (ok && selected.path.isBlank() && playablePath != null) {
+                                            tracks[selectedTrackIndex] = selected.copy(path = playablePath)
+                                        }
+                                        isPlaying = ok
+                                        chatMessages.add(
+                                            ChatMessage(
+                                                id = System.currentTimeMillis(),
+                                                sender = Sender.SYSTEM,
+                                                text = if (ok) {
+                                                    "Playing: ${selected.title}"
+                                                } else {
+                                                    "Failed to play: ${selected.title}"
+                                                }
+                                            )
                                         )
-                                    )
+                                    } finally {
+                                        isResolvingPlayback = false
+                                    }
                                 }
                             }
                         }
@@ -759,7 +767,7 @@ private fun cleanupAudioCache(cacheDir: File) {
         .sortedByDescending { it.lastModified() }
 
     val keepLatest = MAX_CACHED_AUDIO_FILES
-    val maxAgeMs = CACHE_MAX_AGE_HOURS * 60 * 60 * 1000L
+    val maxAgeMs = TimeUnit.HOURS.toMillis(CACHE_MAX_AGE_HOURS)
     val now = System.currentTimeMillis()
 
     audioCacheFiles.forEachIndexed { index, file ->
