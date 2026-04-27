@@ -119,6 +119,10 @@ private val supportedModels = listOf(
     "Gemini 2.5 Fast",
     "Qwen 3.5 (via Novita router)"
 )
+private const val CHAT_BUBBLE_WIDTH_FRACTION = 0.82f
+private const val FFT_UPDATE_INTERVAL_MS = 16L
+private const val MAX_CACHED_AUDIO_FILES = 20
+private const val CACHE_MAX_AGE_HOURS = 12L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -461,7 +465,7 @@ private fun ChatBubble(message: ChatMessage) {
         Text(
             text = message.text,
             modifier = Modifier
-                .fillMaxWidth(0.82f)
+                .fillMaxWidth(CHAT_BUBBLE_WIDTH_FRACTION)
                 .bg_glass_bubble(
                     base = if (isUser) Color(0x552766FF) else Color(0x55FFFFFF)
                 )
@@ -599,7 +603,7 @@ private fun AudioVisualizer(
                     fftData[i] = 0f
                 }
             }
-            delay(16L)
+            delay(FFT_UPDATE_INTERVAL_MS)
         }
     }
 
@@ -751,8 +755,8 @@ private fun cleanupAudioCache(cacheDir: File) {
         .orEmpty()
         .sortedByDescending { it.lastModified() }
 
-    val keepLatest = 20
-    val maxAgeMs = 12 * 60 * 60 * 1000L
+    val keepLatest = MAX_CACHED_AUDIO_FILES
+    val maxAgeMs = CACHE_MAX_AGE_HOURS * 60 * 60 * 1000L
     val now = System.currentTimeMillis()
 
     audioCacheFiles.forEachIndexed { index, file ->
