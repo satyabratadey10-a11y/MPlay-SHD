@@ -91,7 +91,9 @@ void AudioPlayer::Biquad::setupLowShelf(float sampleRate, float centerHz, float 
     reset();
 }
 
-AudioPlayer::AudioPlayer() = default;
+AudioPlayer::AudioPlayer() {
+    initializeFftTables();
+}
 
 AudioPlayer::~AudioPlayer() {
     closeStream();
@@ -423,12 +425,23 @@ void AudioPlayer::pushFftSample(float sampleMono) {
     }
 }
 
+void AudioPlayer::initializeFftTables() {
+    for (int i = 0; i < kFftSize; ++i) {
+        mFftWindow[i] = 0.5f * (1.0f - std::cos(2.0f * kPi * static_cast<float>(i) /
+                                                static_cast<float>(kFftSize - 1)));
+    }
+
+    for (int i = 0; i < kFftSize / 2; ++i) {
+        const float angle = -2.0f * kPi * static_cast<float>(i) / static_cast<float>(kFftSize);
+        mFftTwiddles[i] = std::complex<float>(std::cos(angle), std::sin(angle));
+    }
+}
+
 void AudioPlayer::computeAndPublishFft() {
     std::array<std::complex<float>, kFftSize> x{};
 
     for (int i = 0; i < kFftSize; ++i) {
-        const float w = 0.5f * (1.0f - std::cos(2.0f * kPi * static_cast<float>(i) / static_cast<float>(kFftSize - 1)));
-        x[i] = std::complex<float>(mFftInput[i] * w, 0.0f);
+        x[i] = std::complex<float>(mFftInput[i] * mFftWindow[i], 0.0f);
     }
 
     int j = 0;
@@ -445,16 +458,14 @@ void AudioPlayer::computeAndPublishFft() {
     }
 
     for (int len = 2; len <= kFftSize; len <<= 1) {
-        const float ang = -2.0f * kPi / static_cast<float>(len);
-        const std::complex<float> wlen(std::cos(ang), std::sin(ang));
+        const int step = kFftSize / len;
         for (int i = 0; i < kFftSize; i += len) {
-            std::complex<float> w(1.0f, 0.0f);
             for (int k = 0; k < len / 2; ++k) {
+                const std::complex<float> w = mFftTwiddles[k * step];
                 const std::complex<float> u = x[i + k];
                 const std::complex<float> v = x[i + k + len / 2] * w;
                 x[i + k] = u + v;
                 x[i + k + len / 2] = u - v;
-                w *= wlen;
             }
         }
     }

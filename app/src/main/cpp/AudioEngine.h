@@ -68,6 +68,7 @@ private:
 
     void pushFftSample(float sampleMono);
     void computeAndPublishFft();
+    void initializeFftTables();
 
     std::shared_ptr<oboe::AudioStream> mAudioStream;
 
@@ -91,6 +92,8 @@ private:
     float mCompReleaseCoeff = 0.0f;
 
     std::array<float, kFftSize> mFftInput{};
+    std::array<float, kFftSize> mFftWindow{};
+    std::array<std::complex<float>, kFftSize / 2> mFftTwiddles{};
     int mFftWriteIndex = 0;
 
     std::array<float, kFftBins> mFftBuffers[2]{};
