@@ -584,9 +584,7 @@ private fun AudioVisualizer(
             if (isPlaying) {
                 val native = engine.getFftData()
                 if (native.isEmpty()) {
-                    for (i in 0 until config.barCount) {
-                        fftData[i] = 0f
-                    }
+                    resetFftBars(fftData, config.barCount)
                 } else {
                     if (native.size != lastNativeSize) {
                         for (i in 0 until config.barCount) {
@@ -599,9 +597,7 @@ private fun AudioVisualizer(
                     }
                 }
             } else {
-                for (i in 0 until config.barCount) {
-                    fftData[i] = 0f
-                }
+                resetFftBars(fftData, config.barCount)
             }
             delay(FFT_UPDATE_INTERVAL_MS)
         }
@@ -696,8 +692,9 @@ private suspend fun scanAudioFiles(context: android.content.Context): List<Audio
                 val displayName = cursor.getString(nameIdx) ?: continue
                 val duration = cursor.getLong(durationIdx)
                 val mime = cursor.getString(mimeIdx).orEmpty().lowercase()
-                val isSupported = displayName.lowercase().endsWith(".mp3") ||
-                    displayName.lowercase().endsWith(".wav") ||
+                val lowerName = displayName.lowercase()
+                val isSupported = lowerName.endsWith(".mp3") ||
+                    lowerName.endsWith(".wav") ||
                     mime.contains("mpeg") ||
                     mime.contains("wav")
 
@@ -715,6 +712,12 @@ private suspend fun scanAudioFiles(context: android.content.Context): List<Audio
             }
         }
         result
+    }
+}
+
+private fun resetFftBars(fftData: MutableList<Float>, barCount: Int) {
+    for (i in 0 until barCount) {
+        fftData[i] = 0f
     }
 }
 
