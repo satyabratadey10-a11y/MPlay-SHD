@@ -85,6 +85,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -124,6 +125,7 @@ private const val CHAT_BUBBLE_WIDTH_FRACTION = 0.82f
 private const val FFT_UPDATE_INTERVAL_MS = 16L
 private const val MAX_CACHED_AUDIO_FILES = 20
 private const val CACHE_MAX_AGE_HOURS = 12L
+private val messageIdCounter = AtomicLong(1L)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -142,12 +144,26 @@ private fun AudioPlayerApp() {
     var trackExpanded by remember { mutableStateOf(false) }
     val chatMessages = remember { mutableStateListOf<ChatMessage>() }
     val tracks = remember { mutableStateListOf<AudioTrack>() }
+    val applyScanResults: (List<AudioTrack>) -> Unit = { scanned ->
+        tracks.clear()
+        tracks.addAll(scanned)
+        chatMessages.add(
+            ChatMessage(
+                id = nextMessageId(),
+                sender = Sender.SYSTEM,
+                text = "Scan complete: ${scanned.size} audio files available."
+            )
+        )
+        if (selectedTrackIndex !in scanned.indices) {
+            selectedTrackIndex = if (scanned.isNotEmpty()) 0 else -1
+        }
+    }
 
     LaunchedEffect(Unit) {
         engine.initEngine()
         chatMessages.add(
             ChatMessage(
-                id = System.currentTimeMillis(),
+                id = nextMessageId(),
                 sender = Sender.SYSTEM,
                 text = "Audio system is ready. Pick a model and track to begin."
             )
@@ -160,23 +176,12 @@ private fun AudioPlayerApp() {
         if (granted) {
             scope.launch {
                 val scanned = scanAudioFiles(context)
-                tracks.clear()
-                tracks.addAll(scanned)
-                chatMessages.add(
-                    ChatMessage(
-                        id = System.currentTimeMillis(),
-                        sender = Sender.SYSTEM,
-                        text = "Scan complete: ${scanned.size} audio files available."
-                    )
-                )
-                if (selectedTrackIndex !in scanned.indices) {
-                    selectedTrackIndex = if (scanned.isNotEmpty()) 0 else -1
-                }
+                applyScanResults(scanned)
             }
         } else {
             chatMessages.add(
                 ChatMessage(
-                    id = System.currentTimeMillis(),
+                    id = nextMessageId(),
                     sender = Sender.SYSTEM,
                     text = "READ_MEDIA_AUDIO permission is required for scanning .mp3/.wav files."
                 )
@@ -192,18 +197,7 @@ private fun AudioPlayerApp() {
         ) {
             scope.launch {
                 val scanned = scanAudioFiles(context)
-                tracks.clear()
-                tracks.addAll(scanned)
-                chatMessages.add(
-                    ChatMessage(
-                        id = System.currentTimeMillis(),
-                        sender = Sender.SYSTEM,
-                        text = "Scan complete: ${scanned.size} audio files available."
-                    )
-                )
-                if (selectedTrackIndex !in scanned.indices) {
-                    selectedTrackIndex = if (scanned.isNotEmpty()) 0 else -1
-                }
+                applyScanResults(scanned)
             }
         } else {
             permissionLauncher.launch(Manifest.permission.READ_MEDIA_AUDIO)
@@ -220,7 +214,7 @@ private fun AudioPlayerApp() {
                     chatMessages.clear()
                     chatMessages.add(
                         ChatMessage(
-                            id = System.currentTimeMillis(),
+                            id = nextMessageId(),
                             sender = Sender.SYSTEM,
                             text = "Started a new chat session."
                         )
@@ -230,7 +224,7 @@ private fun AudioPlayerApp() {
                 DrawerRow(title = "History") {
                     chatMessages.add(
                         ChatMessage(
-                            id = System.currentTimeMillis(),
+                            id = nextMessageId(),
                             sender = Sender.SYSTEM,
                             text = "History loaded: ${chatMessages.count { it.sender == Sender.USER }} user queries."
                         )
@@ -240,7 +234,7 @@ private fun AudioPlayerApp() {
                 DrawerRow(title = "API Key Settings") {
                     chatMessages.add(
                         ChatMessage(
-                            id = System.currentTimeMillis(),
+                            id = nextMessageId(),
                             sender = Sender.SYSTEM,
                             text = "API Key Settings opened. Configure your provider key here."
                         )
@@ -270,14 +264,14 @@ private fun AudioPlayerApp() {
                         if (trimmed.isNotEmpty()) {
                             chatMessages.add(
                                 ChatMessage(
-                                    id = System.currentTimeMillis(),
+                                    id = nextMessageId(),
                                     sender = Sender.USER,
                                     text = trimmed
                                 )
                             )
                             chatMessages.add(
                                 ChatMessage(
-                                    id = System.currentTimeMillis() + 1,
+                                    id = nextMessageId(),
                                     sender = Sender.SYSTEM,
                                     text = buildSystemResponse(
                                         query = trimmed,
@@ -360,7 +354,7 @@ private fun AudioPlayerApp() {
                                         isPlaying = ok
                                         chatMessages.add(
                                             ChatMessage(
-                                                id = System.currentTimeMillis(),
+                                                id = nextMessageId(),
                                                 sender = Sender.SYSTEM,
                                                 text = if (ok) {
                                                     "Playing: ${selected.title}"
@@ -384,7 +378,7 @@ private fun AudioPlayerApp() {
                             isPlaying = false
                             chatMessages.add(
                                 ChatMessage(
-                                    id = System.currentTimeMillis(),
+                                    id = nextMessageId(),
                                     sender = Sender.SYSTEM,
                                     text = "Playback paused."
                                 )
@@ -737,7 +731,11 @@ private suspend fun copyUriToCachePath(
     cleanupAudioCache(context.cacheDir)
     val inputUri = Uri.parse(uriString)
     val extension = displayName.substringAfterLast('.', "audio")
-    val output = File(context.cacheDir, "audio_${inputUri.lastPathSegment}_${System.currentTimeMillis()}.$extension")
+    val stableId = uriString.hashCode().toUInt().toString(16)
+    val output = File(context.cacheDir, "audio_${stableId}.$extension")
+    if (output.exists() && output.length() > 0L) {
+        return@withContext output.absolutePath
+    }
     runCatching {
         context.contentResolver.openInputStream(inputUri)?.use { input ->
             output.outputStream().use { out ->
@@ -778,3 +776,5 @@ private fun cleanupAudioCache(cacheDir: File) {
         }
     }
 }
+
+private fun nextMessageId(): Long = messageIdCounter.getAndIncrement()
