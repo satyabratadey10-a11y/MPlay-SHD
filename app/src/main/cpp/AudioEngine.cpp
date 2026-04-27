@@ -268,14 +268,14 @@ bool AudioPlayer::decodeFileToPcmFloatStereo(const std::string &filePath,
         return false;
     }
 
-    constexpr int64_t kTimeoutUs = 8000;
+    constexpr int64_t kCodecTimeoutUs = 8000;
     bool inputEos = false;
     bool outputEos = false;
     int32_t pcmEncoding = kPcmEncodingInt16;
 
     while (!outputEos) {
         if (!inputEos) {
-            const ssize_t inputIndex = AMediaCodec_dequeueInputBuffer(codec, kTimeoutUs);
+            const ssize_t inputIndex = AMediaCodec_dequeueInputBuffer(codec, kCodecTimeoutUs);
             if (inputIndex >= 0) {
                 size_t inputBufSize = 0;
                 uint8_t *inputBuf = AMediaCodec_getInputBuffer(codec, static_cast<size_t>(inputIndex), &inputBufSize);
@@ -302,7 +302,7 @@ bool AudioPlayer::decodeFileToPcmFloatStereo(const std::string &filePath,
         }
 
         AMediaCodecBufferInfo info{};
-        const ssize_t outputIndex = AMediaCodec_dequeueOutputBuffer(codec, &info, kTimeoutUs);
+        const ssize_t outputIndex = AMediaCodec_dequeueOutputBuffer(codec, &info, kCodecTimeoutUs);
         if (outputIndex >= 0) {
             size_t outSize = 0;
             uint8_t *out = AMediaCodec_getOutputBuffer(codec, static_cast<size_t>(outputIndex), &outSize);
