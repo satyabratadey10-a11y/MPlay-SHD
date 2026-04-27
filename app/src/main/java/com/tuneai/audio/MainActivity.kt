@@ -566,7 +566,7 @@ private fun AudioVisualizer(
     config: VisualizerConfig
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
-    val fftData = remember {
+    val fftData = remember(config.barCount) {
         mutableStateListOf<Float>().apply {
             repeat(config.barCount) { add(0f) }
         }
@@ -730,7 +730,7 @@ private suspend fun copyUriToCachePath(
 ): String? = withContext(Dispatchers.IO) {
     cleanupAudioCache(context.cacheDir)
     val inputUri = Uri.parse(uriString)
-    val extension = displayName.substringAfterLast('.', "audio")
+    val extension = displayName.substringAfterLast('.', "tmp")
     val stableId = uriString.hashCode().toUInt().toString(16)
     val output = File(context.cacheDir, "audio_${stableId}.$extension")
     if (output.exists() && output.length() > 0L) {
