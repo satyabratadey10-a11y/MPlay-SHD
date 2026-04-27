@@ -75,9 +75,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.tuneai.audio.nativebridge.NativeAudioEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -270,7 +273,13 @@ private fun AudioPlayerApp() {
                                 ChatMessage(
                                     id = System.currentTimeMillis() + 1,
                                     sender = Sender.SYSTEM,
-                                    text = "[$selectedModel] Acknowledged: \"$trimmed\""
+                                    text = buildSystemResponse(
+                                        query = trimmed,
+                                        selectedModel = selectedModel,
+                                        tracksCount = tracks.size,
+                                        isPlaying = isPlaying,
+                                        selectedTrackTitle = tracks.getOrNull(selectedTrackIndex)?.title
+                                    )
                                 )
                             )
                             queryText = ""
@@ -336,8 +345,8 @@ private fun AudioPlayerApp() {
                                     }
 
                                     val ok = playablePath?.let { engine.play(it) } == true
-                                    if (ok && selected.path.isBlank()) {
-                                        tracks[selectedTrackIndex] = selected.copy(path = playablePath!!)
+                                    if (ok && selected.path.isBlank() && playablePath != null) {
+                                        tracks[selectedTrackIndex] = selected.copy(path = playablePath)
                                     }
                                     isPlaying = ok
                                     chatMessages.add(
@@ -550,21 +559,45 @@ private fun AudioVisualizer(
     modifier: Modifier,
     config: VisualizerConfig
 ) {
-    var fftData by remember { mutableStateOf(FloatArray(config.barCount)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val fftData = remember {
+        mutableStateListOf<Float>().apply {
+            repeat(config.barCount) { add(0f) }
+        }
+    }
 
-    LaunchedEffect(engine, isPlaying) {
-        while (true) {
-            fftData = if (isPlaying) {
+    LaunchedEffect(engine, isPlaying, lifecycleOwner) {
+        var lastNativeSize = -1
+        val indexMap = IntArray(config.barCount) { 0 }
+
+        while (isActive) {
+            val inForeground = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+            if (!inForeground) {
+                delay(250L)
+                continue
+            }
+
+            if (isPlaying) {
                 val native = engine.getFftData()
                 if (native.isEmpty()) {
-                    FloatArray(config.barCount)
+                    for (i in 0 until config.barCount) {
+                        fftData[i] = 0f
+                    }
                 } else {
-                    FloatArray(config.barCount) { i ->
-                        native[(i * native.size / config.barCount).coerceIn(0, native.lastIndex)]
+                    if (native.size != lastNativeSize) {
+                        for (i in 0 until config.barCount) {
+                            indexMap[i] = (i * native.size / config.barCount).coerceIn(0, native.lastIndex)
+                        }
+                        lastNativeSize = native.size
+                    }
+                    for (i in 0 until config.barCount) {
+                        fftData[i] = native[indexMap[i]]
                     }
                 }
             } else {
-                FloatArray(config.barCount)
+                for (i in 0 until config.barCount) {
+                    fftData[i] = 0f
+                }
             }
             delay(16L)
         }
@@ -686,6 +719,7 @@ private suspend fun copyUriToCachePath(
     uriString: String,
     displayName: String
 ): String? = withContext(Dispatchers.IO) {
+    cleanupAudioCache(context.cacheDir)
     val inputUri = Uri.parse(uriString)
     val extension = displayName.substringAfterLast('.', "audio")
     val output = File(context.cacheDir, "audio_${inputUri.lastPathSegment}_${System.currentTimeMillis()}.$extension")
@@ -697,4 +731,35 @@ private suspend fun copyUriToCachePath(
         } ?: return@withContext null
         output.absolutePath
     }.getOrNull()
+}
+
+private fun buildSystemResponse(
+    query: String,
+    selectedModel: String,
+    tracksCount: Int,
+    isPlaying: Boolean,
+    selectedTrackTitle: String?
+): String {
+    val trackText = selectedTrackTitle ?: "no track selected"
+    val playback = if (isPlaying) "playing" else "paused"
+    return "Model: $selectedModel | Query: \"$query\" | Library: $tracksCount tracks | Track: $trackText | Playback: $playback"
+}
+
+private fun cleanupAudioCache(cacheDir: File) {
+    val audioCacheFiles = cacheDir.listFiles()
+        ?.filter { it.name.startsWith("audio_") }
+        .orEmpty()
+        .sortedByDescending { it.lastModified() }
+
+    val keepLatest = 20
+    val maxAgeMs = 12 * 60 * 60 * 1000L
+    val now = System.currentTimeMillis()
+
+    audioCacheFiles.forEachIndexed { index, file ->
+        val isOld = now - file.lastModified() > maxAgeMs
+        val exceedsCount = index >= keepLatest
+        if (isOld || exceedsCount) {
+            file.delete()
+        }
+    }
 }
