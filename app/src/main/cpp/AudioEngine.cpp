@@ -16,6 +16,8 @@ constexpr const char *kTag = "TuneAiAudioEngine";
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, kTag, __VA_ARGS__)
 
 constexpr float kPi = 3.14159265358979323846f;
+constexpr int32_t kPcmEncodingInt16 = 2;
+constexpr int32_t kPcmEncodingFloat = 4;
 
 std::unique_ptr<AudioPlayer> gPlayer;
 
@@ -267,7 +269,7 @@ bool AudioPlayer::decodeFileToPcmFloatStereo(const std::string &filePath,
     constexpr int64_t kTimeoutUs = 8000;
     bool inputEos = false;
     bool outputEos = false;
-    int32_t pcmEncoding = 2;
+    int32_t pcmEncoding = kPcmEncodingInt16;
 
     while (!outputEos) {
         if (!inputEos) {
@@ -305,7 +307,7 @@ bool AudioPlayer::decodeFileToPcmFloatStereo(const std::string &filePath,
 
             if (out && info.size > 0) {
                 const uint8_t *raw = out + info.offset;
-                if (pcmEncoding == 4) {
+                if (pcmEncoding == kPcmEncodingFloat) {
                     const size_t totalSamples = static_cast<size_t>(info.size) / sizeof(float);
                     const float *f32 = reinterpret_cast<const float *>(raw);
                     for (size_t i = 0; i < totalSamples; i += channels) {
@@ -367,6 +369,7 @@ void AudioPlayer::prepareDspForSampleRate(int32_t sampleRate) {
     constexpr float releaseMs = 95.0f;
     mCompAttackCoeff = std::exp(-1.0f / (fs * attackMs * 0.001f));
     mCompReleaseCoeff = std::exp(-1.0f / (fs * releaseMs * 0.001f));
+    mCompExponent = 1.0f - 1.0f / mCompRatio;
     mCompEnvelope = 0.0f;
 }
 
@@ -384,7 +387,7 @@ void AudioPlayer::runDynamicPunch(float &left, float &right) {
     float gain = 1.0f;
     if (mCompEnvelope > mCompThreshold) {
         const float over = mCompEnvelope / mCompThreshold;
-        const float compressed = std::pow(over, (1.0f - 1.0f / mCompRatio));
+        const float compressed = std::pow(over, mCompExponent);
         gain = 1.0f / compressed;
     }
 
@@ -457,10 +460,11 @@ void AudioPlayer::computeAndPublishFft() {
     }
 
     const int writeIdx = 1 - mPublishedFftIndex.load(std::memory_order_relaxed);
+    constexpr int kBinStride = ((kFftSize / 2 - 1) / kFftBins);
     constexpr float kEps = 1e-9f;
 
     for (int b = 0; b < kFftBins; ++b) {
-        const int fftIndex = 1 + b * ((kFftSize / 2 - 1) / kFftBins);
+        const int fftIndex = 1 + b * kBinStride;
         const float mag = std::abs(x[fftIndex]) / static_cast<float>(kFftSize);
         const float db = 20.0f * std::log10(mag + kEps);
         const float normalized = std::clamp((db + 72.0f) / 72.0f, 0.0f, 1.0f);

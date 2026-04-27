@@ -86,6 +86,7 @@ private:
     float mCompEnvelope = 0.0f;
     float mCompThreshold = 0.35f;
     float mCompRatio = 3.0f;
+    float mCompExponent = 0.6666667f;
     float mCompAttackCoeff = 0.0f;
     float mCompReleaseCoeff = 0.0f;
 
