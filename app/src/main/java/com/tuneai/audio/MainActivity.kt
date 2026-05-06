@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.MediaStore
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -71,6 +72,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
+import java.io.File
 import kotlin.math.max
 
 class MainActivity : ComponentActivity() {
@@ -138,12 +140,18 @@ private fun MPlayScreen() {
 
     LaunchedEffect(currentTrack?.id) {
         if (currentTrack == null) return@LaunchedEffect
+        val audioFile = File(currentTrack.path)
+        if (!audioFile.exists() || !audioFile.canRead()) {
+            errorMessage = "File unavailable: ${currentTrack.title}"
+            return@LaunchedEffect
+        }
         runCatching {
             player.reset()
-            player.setDataSource(currentTrack.path)
+            player.setDataSource(audioFile.absolutePath)
             player.prepare()
             durationMs = player.duration.toLong().coerceAtLeast(0L)
             positionMs = 0L
+            errorMessage = null
             if (isPlaying) {
                 player.start()
             }
@@ -260,7 +268,7 @@ private fun MPlayScreen() {
 
             if (errorMessage != null) {
                 Text(
-                    text = errorMessage ?: "",
+                    text = errorMessage!!,
                     color = MaterialTheme.colorScheme.error,
                     fontSize = 12.sp
                 )
@@ -579,7 +587,7 @@ private suspend fun scanLocalAudio(context: Context): List<Track> = withContext(
     val sortOrder = "${MediaStore.Audio.Media.DATE_ADDED} DESC"
 
     val tracks = mutableListOf<Track>()
-    @Suppress("DEPRECATION")
+    @Suppress("DEPRECATION") // DATA path is needed for native engine playback.
     resolver.query(collection, projection, selection, selectionArgs, sortOrder)?.use { cursor ->
         val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
         val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
