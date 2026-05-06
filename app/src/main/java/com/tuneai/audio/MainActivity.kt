@@ -304,7 +304,7 @@ private fun PermissionRequestCard(onRequest: () -> Unit) {
             fontSize = 16.sp
         )
         Text(
-            text = "We only request READ_MEDIA_AUDIO to list local MP3 and WAV tracks.",
+            text = "We only request READ_MEDIA_AUDIO to list local MP3 and WAV audio.",
             color = Color(0xFFB8BECC),
             fontSize = 13.sp
         )
