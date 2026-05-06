@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -14,7 +15,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import com.tuneai.audio.nativebridge.NativeAudioEngine
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlin.math.abs
 import kotlin.math.min
@@ -29,8 +29,8 @@ fun HardwareVisualizer(
 
     LaunchedEffect(engine) {
         while (isActive) {
+            withFrameNanos { }
             fftData = engine.getFftData()
-            delay(16L)
         }
     }
 

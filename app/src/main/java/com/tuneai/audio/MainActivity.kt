@@ -2,6 +2,7 @@ package com.tuneai.audio
 
 import android.Manifest
 import android.content.ContentResolver
+import android.content.ContentUris
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaPlayer
@@ -72,8 +73,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
-import java.io.File
 import kotlin.math.max
+
+private const val DEFAULT_PROFILE = NativeAudioEngine.PROFILE_STUDIO_FLAT
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -108,7 +110,7 @@ private fun MPlayScreen() {
     var positionMs by remember { mutableLongStateOf(0L) }
     var isSeeking by remember { mutableStateOf(false) }
     var showDspSheet by remember { mutableStateOf(false) }
-    var currentProfile by remember { mutableIntStateOf(NativeAudioEngine.PROFILE_STUDIO_FLAT) }
+    var currentProfile by remember { mutableIntStateOf(DEFAULT_PROFILE) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -140,14 +142,15 @@ private fun MPlayScreen() {
 
     LaunchedEffect(currentTrack?.id) {
         if (currentTrack == null) return@LaunchedEffect
-        val audioFile = File(currentTrack.path)
-        if (!audioFile.exists() || !audioFile.canRead()) {
-            errorMessage = "File unavailable: ${currentTrack.title}"
-            return@LaunchedEffect
-        }
         runCatching {
+            val descriptor = context.contentResolver.openFileDescriptor(currentTrack.uri, "r")
+            if (descriptor == null) {
+                errorMessage = "File unavailable: ${currentTrack.title}"
+                return@LaunchedEffect
+            }
+            descriptor.close()
             player.reset()
-            player.setDataSource(audioFile.absolutePath)
+            player.setDataSource(context, currentTrack.uri)
             player.prepare()
             durationMs = player.duration.toLong().coerceAtLeast(0L)
             positionMs = 0L
@@ -182,7 +185,7 @@ private fun MPlayScreen() {
             if (!isSeeking && currentTrack != null && player.isPlaying) {
                 positionMs = player.currentPosition.toLong().coerceAtLeast(0L)
             }
-            delay(200L)
+            delay(100L)
         }
     }
 
@@ -566,7 +569,6 @@ private suspend fun scanLocalAudio(context: Context): List<Track> = withContext(
         MediaStore.Audio.Media.TITLE,
         MediaStore.Audio.Media.ARTIST,
         MediaStore.Audio.Media.DURATION,
-        MediaStore.Audio.Media.DATA,
         MediaStore.Audio.Media.MIME_TYPE
     )
 
@@ -587,21 +589,19 @@ private suspend fun scanLocalAudio(context: Context): List<Track> = withContext(
     val sortOrder = "${MediaStore.Audio.Media.DATE_ADDED} DESC"
 
     val tracks = mutableListOf<Track>()
-    @Suppress("DEPRECATION") // DATA path is needed for native engine playback.
     resolver.query(collection, projection, selection, selectionArgs, sortOrder)?.use { cursor ->
         val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
         val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
         val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
         val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-        val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
         while (cursor.moveToNext()) {
-            val path = cursor.getString(dataCol) ?: continue
+            val id = cursor.getLong(idCol)
             tracks += Track(
-                id = cursor.getLong(idCol),
+                id = id,
                 title = cursor.getString(titleCol) ?: "Unknown Title",
                 artist = cursor.getString(artistCol) ?: "Unknown Artist",
                 durationMs = cursor.getLong(durationCol).coerceAtLeast(0L),
-                path = path
+                uri = ContentUris.withAppendedId(collection, id)
             )
         }
     }
@@ -620,7 +620,7 @@ private data class Track(
     val title: String,
     val artist: String,
     val durationMs: Long,
-    val path: String
+    val uri: Uri
 )
 
 @Composable
