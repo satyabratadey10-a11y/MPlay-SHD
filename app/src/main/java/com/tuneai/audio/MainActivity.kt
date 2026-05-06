@@ -76,8 +76,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlin.math.max
 
-private const val DEFAULT_PROFILE = NativeAudioEngine.PROFILE_STUDIO_FLAT
-
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -111,7 +109,7 @@ private fun MPlayScreen() {
     var positionMs by remember { mutableLongStateOf(0L) }
     var isSeeking by remember { mutableStateOf(false) }
     var showDspSheet by remember { mutableStateOf(false) }
-    var currentProfile by remember { mutableIntStateOf(DEFAULT_PROFILE) }
+    var currentProfile by remember { mutableIntStateOf(NativeAudioEngine.PROFILE_STUDIO_FLAT) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -144,12 +142,6 @@ private fun MPlayScreen() {
     LaunchedEffect(currentTrack?.id) {
         if (currentTrack == null) return@LaunchedEffect
         runCatching {
-            val descriptor = context.contentResolver.openFileDescriptor(currentTrack.uri, "r")
-            if (descriptor == null) {
-                errorMessage = "File unavailable: ${currentTrack.title}"
-                return@LaunchedEffect
-            }
-            descriptor.close()
             player.reset()
             player.setDataSource(context, currentTrack.uri)
             player.prepare()
@@ -577,11 +569,8 @@ private suspend fun scanLocalAudio(context: Context): List<Track> = withContext(
     )
 
     val selection = (
-        "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND (" +
-            "${MediaStore.Audio.Media.MIME_TYPE}=? OR " +
-            "${MediaStore.Audio.Media.MIME_TYPE}=? OR " +
-            "${MediaStore.Audio.Media.MIME_TYPE}=?" +
-            ")"
+        "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND " +
+            "${MediaStore.Audio.Media.MIME_TYPE} IN (?, ?, ?)"
         )
 
     val selectionArgs = arrayOf(
