@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -444,15 +445,15 @@ private fun PlaybackPanel(
             }
         }
 
-        val safeDuration = max(durationMs, 1L)
+        val nonZeroDuration = max(durationMs, 1L)
         Slider(
-            value = positionMs.coerceIn(0L, safeDuration).toFloat(),
+            value = positionMs.coerceIn(0L, nonZeroDuration).toFloat(),
             onValueChange = { newValue ->
                 onSeekStart()
                 onSeek(newValue.toLong())
             },
             onValueChangeFinished = { onSeekEnd() },
-            valueRange = 0f..safeDuration.toFloat()
+            valueRange = 0f..nonZeroDuration.toFloat()
         )
 
         Row(
@@ -546,12 +547,15 @@ private fun ProfileOption(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, borderColor)
+        border = BorderStroke(1.dp, borderColor),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = background,
+            contentColor = Color(0xFFE7ECF6)
+        )
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(background)
                 .padding(vertical = 12.dp)
         ) {
             Text(text = title, fontWeight = FontWeight.SemiBold)
