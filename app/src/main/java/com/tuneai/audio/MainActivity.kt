@@ -304,7 +304,7 @@ private fun PermissionRequestCard(onRequest: () -> Unit) {
             fontSize = 16.sp
         )
         Text(
-            text = "We only request READ_MEDIA_AUDIO to list local MP3 and WAV audio.",
+            text = "We only request READ_MEDIA_AUDIO to list local MP3 (MPEG) and WAV audio.",
             color = Color(0xFFB8BECC),
             fontSize = 13.sp
         )
@@ -437,15 +437,15 @@ private fun PlaybackPanel(
             }
         }
 
-        val nonZeroDuration = max(durationMs, 1L)
+        val minDuration = max(durationMs, 1L)
         Slider(
-            value = positionMs.coerceIn(0L, nonZeroDuration).toFloat(),
+            value = positionMs.coerceIn(0L, minDuration).toFloat(),
             onValueChange = { newValue ->
                 onSeekStart()
                 onSeek(newValue.toLong())
             },
             onValueChangeFinished = { onSeekEnd() },
-            valueRange = 0f..nonZeroDuration.toFloat()
+            valueRange = 0f..minDuration.toFloat()
         )
 
         Row(
