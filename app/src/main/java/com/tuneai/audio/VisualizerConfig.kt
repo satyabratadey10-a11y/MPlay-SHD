@@ -28,9 +28,13 @@ fun HardwareVisualizer(
     var fftData by remember { mutableStateOf(FloatArray(0)) }
 
     LaunchedEffect(engine) {
+        var lastFrameTime = 0L
         while (isActive) {
-            withFrameNanos { }
-            fftData = engine.getFftData()
+            val frameTime = withFrameNanos { it }
+            if (frameTime - lastFrameTime >= 16_000_000L) {
+                fftData = engine.getFftData()
+                lastFrameTime = frameTime
+            }
         }
     }
 

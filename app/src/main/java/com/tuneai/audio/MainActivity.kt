@@ -158,7 +158,8 @@ private fun MPlayScreen() {
                 }
             }
         }.onFailure { error ->
-            errorMessage = error.message ?: "Unable to play ${currentTrack.title}"
+            val detail = error.message ?: "unknown error"
+            errorMessage = "Playback failed: ${currentTrack.title} ($detail)"
         }
     }
 
