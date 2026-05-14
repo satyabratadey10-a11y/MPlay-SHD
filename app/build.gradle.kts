@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "com.tuneai.audio"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.tuneai.audio"
